@@ -1,0 +1,12 @@
+{
+  "name": "paltalabs-mvp",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "dev": "pnpm -r --parallel dev",
+    "worker": "pnpm --filter @paltalabs/api worker",
+    "e2e:api": "pnpm --filter @paltalabs/api e2e:api"
+  },
+  "packageManager": "pnpm@11.18.0"
+}

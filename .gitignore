@@ -1,0 +1,13 @@
+resources
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+# confidential — never in the public repo
+docs/evidence/*.secret.json
+docs/internal/
+.scratch/
+# spike scratch state (throwaway keys, launch forms) — never committed
+api/scripts/.spike-*
