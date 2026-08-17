@@ -2,7 +2,7 @@ import { PixDetailsRequestSchema, type KycLaunchResponse, type PayinOrderRespons
 import { usePrivy } from '@privy-io/react-auth'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { ApiError } from '../core/client'
 import { centsToDecimal } from '../core/format'
 import {
@@ -278,12 +278,14 @@ function orderBadgeClass(status: string): 'pending' | 'confirmed' | 'failed' {
  * Conclusions §8) — only `PixDeposit {depositAmount, depositBankName,
  * depositAccountHolder}` — so this renders those plus a status pill polling
  * `usePayinState` (which polls every 5s while `created`/`funded`) and, on
- * testnet only, the sandbox "Simulate deposit" button. Once the polled
+ * testnet only, the sandbox "Simulate deposit" button — a successful simulate
+ * invalidates `['activity']` and routes to `/activity`. Once the polled
  * status reaches `completed`/`finalized`, invalidates `['wallet']` so the
  * merchant's balance is fresh the next time they see it.
  */
 function DepositPanel({ order }: { order: PayinOrderResponse }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const payinState = usePayinState(order.orderId)
   const simulate = useSimulatePayin(order.orderId)
   const status = payinState.data?.status ?? order.status
@@ -320,7 +322,23 @@ function DepositPanel({ order }: { order: PayinOrderResponse }) {
         </p>
       )}
       {STELLAR_NETWORK === 'testnet' && !completed && (
-        <button className="btn" onClick={() => simulate.mutate()} disabled={simulate.isPending}>
+        <button
+          className="btn"
+          onClick={() =>
+            // The simulated deposit settles server-side (Etherfuse completes
+            // the order, then the worker's ramp poller confirms the activity
+            // row) — nothing more happens on this panel, so land the user on
+            // Activity, which polls while the row is pending, instead of
+            // leaving them staring at a status pill that only flips later.
+            simulate.mutate(undefined, {
+              onSuccess: () => {
+                void qc.invalidateQueries({ queryKey: ['activity'] })
+                void navigate('/activity')
+              },
+            })
+          }
+          disabled={simulate.isPending}
+        >
           {simulate.isPending ? 'Simulating…' : 'Simulate deposit (testnet)'}
         </button>
       )}

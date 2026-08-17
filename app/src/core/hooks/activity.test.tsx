@@ -5,7 +5,7 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from '../client'
 import { CoreProvider } from '../context'
-import { useActivity } from './activity'
+import { activityRefetchInterval, useActivity } from './activity'
 
 function makeWrapper(client: ApiClient) {
   const queryClient = new QueryClient()
@@ -68,5 +68,19 @@ describe('useActivity', () => {
       itemOne.id,
       itemTwo.id,
     ])
+  })
+})
+
+describe('activityRefetchInterval', () => {
+  const page = (items: ActivityItem[]) => ({ items, nextBefore: null })
+
+  it('polls while any loaded row is still pending', () => {
+    const pending: ActivityItem = { ...itemOne, id: 'act-3', status: 'pending', txHash: null }
+    expect(activityRefetchInterval({ pages: [page([itemOne]), page([pending])], pageParams: [null, 'c'] })).toBe(5000)
+  })
+
+  it('stops polling once every loaded row is settled, and before any data has loaded', () => {
+    expect(activityRefetchInterval({ pages: [page([itemOne, itemTwo])], pageParams: [null] })).toBe(false)
+    expect(activityRefetchInterval(undefined)).toBe(false)
   })
 })

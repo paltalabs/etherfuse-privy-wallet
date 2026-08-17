@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from '../core/client'
 import { CoreProvider } from '../core/context'
@@ -189,6 +189,58 @@ describe('OnRamp — ready', () => {
     })
     expect(screen.getByText('created')).toBeDefined()
     expect(screen.getByRole('button', { name: 'Simulate deposit (testnet)' })).toBeDefined()
+  })
+
+  it('simulating the sandbox deposit posts to the simulate endpoint and then routes to the Activity screen', async () => {
+    const quoteResponse = {
+      quoteId: 'quote_test',
+      expiresAt: Date.now() + 120_000,
+      senderAmountCents: 10000,
+      receiverAmountCents: 1962,
+      flatFeeCents: 200,
+      commercialQuotation: 5.25,
+    }
+    const payinOrderResponse = {
+      orderId: 'order-1',
+      status: 'created',
+      deposit: { depositAmount: '100', depositBankName: 'PIX', depositAccountHolder: 'Etherfuse' },
+      receiverAmountCents: 1962,
+    }
+    const get = vi.fn().mockImplementation((path: string) => {
+      if (path === '/ramp/onboarding') return Promise.resolve({ status: 'ready' })
+      if (path === '/wallet') return Promise.resolve({ stellarAddress: 'GADDR', provisioned: true, balances: [] })
+      return Promise.resolve({ orderId: 'order-1', status: 'created', txHash: null })
+    })
+    const post = vi.fn().mockImplementation((path: string) => {
+      if (path === '/ramp/payin/quote') return Promise.resolve(quoteResponse)
+      if (path === '/ramp/payin') return Promise.resolve(payinOrderResponse)
+      if (path === '/ramp/payin/order-1/simulate') return Promise.resolve(undefined)
+      throw new Error(`unexpected post ${path}`)
+    })
+    const client = { get, post } as unknown as ApiClient
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    // A real route table so the post-simulate redirect has a destination to land on.
+    render(
+      <MemoryRouter initialEntries={['/onramp']}>
+        <QueryClientProvider client={queryClient}>
+          <CoreProvider value={{ client, signer: null, walletAddress: 'GADDR' }}>
+            <Routes>
+              <Route path="/onramp" element={<OnRamp />} />
+              <Route path="/activity" element={<div>ACTIVITY_SCREEN</div>} />
+            </Routes>
+          </CoreProvider>
+        </QueryClientProvider>
+      </MemoryRouter>,
+    )
+
+    fireEvent.change(await screen.findByLabelText('Amount (BRL)'), { target: { value: '100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Get quote' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm deposit' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Simulate deposit (testnet)' }))
+
+    expect(await screen.findByText('ACTIVITY_SCREEN')).toBeDefined()
+    expect(post).toHaveBeenCalledWith('/ramp/payin/order-1/simulate', expect.anything())
   })
 
   it('invalidates the wallet balance once the polled payin status reaches completed', async () => {
