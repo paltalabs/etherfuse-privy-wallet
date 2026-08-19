@@ -82,7 +82,9 @@ async function main(): Promise<void> {
 
   app.log.info({network: network.name, port: env.PORT}, 'starting api server');
 
-  await app.listen({port: env.PORT});
+  // 0.0.0.0, not Fastify's localhost default — containerized deploys
+  // (e.g. Railway) route ingress to the container's external interface.
+  await app.listen({port: env.PORT, host: '0.0.0.0'});
 }
 
 main().catch((err: unknown) => {
